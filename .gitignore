@@ -1,5 +1,4 @@
 .venv/
 venv/
-.venv/
 *.ifc
-__pycache__/
+__pycache__/s
