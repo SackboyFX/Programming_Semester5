@@ -6,49 +6,52 @@ import pandas as pd
 
 model = ifcopenshell.open(r"C:\Users\mikek\OneDrive - Hochschule Luzern\Semester 5\DT Programming\Coding Project\Beispiele_IfcOpenShell_Pandas SW4\ARC_Modell_NEST_230328.ifc")
 
-print(model.schema)
-print(model.by_id(1))
-print(model.by_guid('0KJ$FDU6nM29SMLWGbbTF3'))
-walls = model.by_type('ifcwall')
-print('The first wall is', walls[0])
+walls = model.by_type('IfcWall')
+print(len(model.by_type('IfcWall')))
 
-print(walls[0].is_a())
-print(walls[0].is_a('IFCWall'))
-print('The wall ID is', walls[0].id())
+# print(model.schema)
+# print(model.by_id(1))
+# print(model.by_guid('0KJ$FDU6nM29SMLWGbbTF3'))
+# walls = model.by_type('ifcwall')
+# print('The first wall is', walls[0])
 
-print(walls[0])
+# print(walls[0].is_a())
+# print(walls[0].is_a('IFCWall'))
+# print('The wall ID is', walls[0].id())
 
-for i in range(0,7):
-    print(walls[0][i])
+# print(walls[0])
 
-print()
+# for i in range(0,7):
+#     print(walls[0][i])
 
-print(walls[0].get_info())
+# print()
 
-#df = pd.DataFrame(walls) 
-#print(df)
+# print(walls[0].get_info())
 
-print()
+# #df = pd.DataFrame(walls) 
+# #print(df)
 
-print('The name of this wall is', walls[5].Name)
+# print()
 
-import ifcopenshell.util
-import ifcopenshell.util.element
+# print('The name of this wall is', walls[5].Name)
 
-print()
+# import ifcopenshell.util
+# import ifcopenshell.util.element
 
-#print('The PSETS are', ifcopenshell.util.element.get_psets(walls[0]))
+# print()
 
-#print('The wall is defined by', walls[0].IsDefinedBy)
+# #print('The PSETS are', ifcopenshell.util.element.get_psets(walls[0]))
 
-#To continue, continue IFC documentary: 'Perhaps we want to see all elements which are referencing our wall?' till the end, then look at Code Examples, then see the PDF from school.
+# #print('The wall is defined by', walls[0].IsDefinedBy)
 
-#print(model.traverse(walls[0]))
+# #To continue, continue IFC documentary: 'Perhaps we want to see all elements which are referencing our wall?' till the end, then look at Code Examples, then see the PDF from school.
 
-wallnew = walls[0]
+# #print(model.traverse(walls[0]))
 
-wallnew.Name = "Mike Khayat is a Wall"
+# wallnew = walls[0]
 
-print(wallnew.Name)
+# wallnew.Name = "Mike Khayat is a Wall"
 
-model.write(r"C:\Users\mikek\OneDrive - Hochschule Luzern\Semester 5\DT Programming\Coding Project\Beispiele_IfcOpenShell_Pandas SW4\Modified_IFC.ifc")
+# print(wallnew.Name)
+
+# model.write(r"C:\Users\mikek\OneDrive - Hochschule Luzern\Semester 5\DT Programming\Coding Project\Beispiele_IfcOpenShell_Pandas SW4\Modified_IFC.ifc")
