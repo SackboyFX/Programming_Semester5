@@ -1,5 +1,7 @@
 from nicegui import ui, events
 import ifcopenshell
+import ifcopenshell.util
+import ifcopenshell.util.element
 from IfcModel import ifcmodel
 
 ui.button("Test")
@@ -16,12 +18,20 @@ async def load_ifc(document):
     print("A file arrived:", document.file.name)
     print(model.schema)
     ifc_course_count() # Run Function to return IFC Course Count after file has been loaded.
+    ifc_data_type() # Run Function to return Data Type after file has been loaded.
 
 
 #Return IFC Course count
 def ifc_course_count():
     roads = model.by_type('IfcCourse')
     ui.label(f"Number of Courses: {len(roads)}")
+
+
+#Return Data Type
+def ifc_data_type():
+    road = model.by_type('IfcCourse')
+    datatype = ifcopenshell.util.element.get_psets(road[0])["GoBau_Menge"]["Volumen (m3)"]
+    ui.label(f"Data Type: {type(datatype)}")
 
 
 #Reject Upload Function
