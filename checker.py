@@ -182,7 +182,6 @@ if __name__ == "__main__":
 
     checker = Checker(model, "03 Neu")
 
-    #usecols="A:E": only read the rules table, not the grey examples on the right.
-    ruleset = pd.read_excel("PsetCheck_Rules_Template.xlsx", sheet_name="Rules", usecols="A:E")
+    ruleset = pd.read_excel("PsetCheck_Rules_Template.xlsx", sheet_name="Rules")
 
     rulecheck(checker, ruleset)
