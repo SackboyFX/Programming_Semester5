@@ -211,6 +211,21 @@ Ignore CAD junk: `Properties`, `Misc`, `General`, `3D Visualization`, `Geometry`
 - Set → list: `list(my_set)`.
 - `x in my_set` / `x in my_list` → True/False (used for allowed-value checks).
 - `key in my_dict` → True/False: does this key exist? (e.g. `"GoBau_Menge" in psets`)
+
+**Comparison operators** (each one gives `True` / `False`; used as the *condition* of an `if`):
+
+| Operator | Means |
+|---|---|
+| `==` | equal |
+| `!=` | not equal |
+| `>` / `<` | greater / less than |
+| `>=` / `<=` | greater or equal / less or equal |
+| `in` / `not in` | is in the list/set/dict |
+| `is None` / `is not None` | is (not) missing |
+
+- `=` assigns a value, `==` compares. `if x = 5` is a SyntaxError.
+- Chain them: `if 0 < value <= 500:` (= between, used in `check_range`).
+- Combine with `and`, `or`, `not`.
 - **Empty check:** `if not my_list:` → True if empty. Works for lists, sets, dicts and strings.
 - A list comprehension with no matches gives `[]`, **not** `None` → `[] is None` is False. Check `if not sites:` before using `sites[0]`.
 
@@ -316,6 +331,19 @@ pd.DataFrame(results)   # == pd.DataFrame(data)
 ```
 
 With dictionary-of-lists, forgetting one `.append` in one branch makes columns different lengths → `All arrays must be of the same length`.
+
+**Viewing a DataFrame properly (like Spyder's variable explorer):**
+
+```python
+df.to_csv("check_result.csv", index=False)   # then: right-click file → "Open in Data Wrangler"
+print(df.to_string())                        # print ALL rows instead of "..."
+df.to_excel("check.xlsx", index=False)       # open in Excel
+```
+
+- **Data Wrangler** (VS Code extension, Microsoft): sorting, filtering, and per-column stats (missing, distinct, % per value).
+- Debugger route (F5 → breakpoint on the line *after* `df = ...` → Run and Debug → Variables → right-click `df` → "View Value in Data Viewer") may not work with every Python version – the CSV route always works.
+- Breakpoints stop **before** their line runs. Don't click "Set Value" in the Variables menu.
+- Add `*.csv` to `.gitignore` – results contain company model data.
 
 **Reusable check function (next step):**
 
@@ -473,6 +501,29 @@ class RuleSet:
 
 - `RuleSet` = blueprint, `RuleSet(data)` = an actual object.
 - Use classes for **your own logic** (rules, checks). Don't wrap IfcOpenShell just to redefine its functions.
+
+**Planned: the `Checker` class** (in `checks.py`) – removes the repeated "find site → get elements" from every check:
+
+```python
+class Checker:
+    def __init__(self, model, site_name):
+        # find the site + collect self.elements ONCE
+        ...
+
+    def check_allowed(self, pset, property, allowed_values): ...   # loops over self.elements
+    def check_type(self, pset, property, expected_type): ...
+    def check_range(self, pset, property, minimum): ...
+```
+
+```python
+# Streamlit.py
+from checks import Checker
+checker = Checker(model, "03 Neu")
+df1 = checker.check_allowed("GoBau_Ausschreibung", "Kostenteiler", {...})
+df2 = checker.check_type("GoBau_Menge", "Volumen (m3)", float)
+```
+
+Order: build `check_type` as a plain function first → once two checks exist, move both into `Checker`.
 
 ---
 
