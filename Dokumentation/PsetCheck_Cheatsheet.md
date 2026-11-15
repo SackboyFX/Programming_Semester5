@@ -402,6 +402,51 @@ Siblings later: `check_type(element, pset, prop, expected_type)`, `check_range(e
 
 ---
 
+## 4d. Rules Excel + picking rows ⭐
+
+**Rules format (PsetCheck_Rules_Template.xlsx, sheet "Rules"):** one row = one check.
+`pset | property | check | operator | value`
+- `check` = allowed / type / range
+- `operator` only for range (`<` `<=` `>` `>=` `==` `!=`), empty otherwise → pandas reads empty as `NaN`
+- `value`: allowed → `A;B;C` (→ `set(value.split(";"))`), type → `str`/`float`/`int` (→ dict to real type), range → number
+- Output plan: report with one sheet per check (allowed / type / range)
+
+```python
+rules = pd.read_excel(path, sheet_name="Rules", usecols="A:E")  # usecols skips the grey examples on the right
+```
+
+**Picking rows in a DataFrame:**
+```python
+df["check"]                      # a COLUMN
+df.iloc[0]                       # row by position
+df.iloc[0:3]                     # rows 0,1,2
+df[df["check"] == "type"]        # rows by condition
+df[(df["check"] == "range") & (df["value"] > 0)]   # & = and, | = or, brackets needed
+```
+
+**Loop through rows one by one:**
+```python
+for index, row in rules.iterrows():   # gives (row number, row) as a pair → unpacked like value, error = ...
+    print(row["pset"], row["check"])  # row works like a dict (it's a pandas Series)
+
+for _, row in rules.iterrows():       # _ = "I don't need the index"
+```
+
+**One report, several sheets (rulecheck in checker.py):**
+```python
+results = {"allowed": [], "type": [], "range": []}   # one list per check kind
+results[check].append(df)                            # in the loop
+all_allowed = pd.concat(results["allowed"], ignore_index=True)   # stack tables (same columns!)
+with pd.ExcelWriter("PsetCheck_Report.xlsx") as writer:          # one file ...
+    all_allowed.to_excel(writer, sheet_name="Allowed", index=False)  # ... one sheet each
+```
+- `index=False` → no "Unnamed: 0" column
+- concat only stacks nicely if all tables have the same columns → results use fixed `Pset | Property | Value` instead of the property name
+- `"A; B".split(";")` → `["A", " B"]` → `[v.strip() for v in ...]` removes the spaces
+- check returns `None` (invalid rule) → check `if df is None:` before `.to_excel`
+
+---
+
 ## 4c. break, continue, return
 
 | Keyword | Leaves | Use when |
