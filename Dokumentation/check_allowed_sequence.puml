@@ -1,0 +1,56 @@
+@startuml check_allowed_sequence
+' PsetCheck – check_allowed(): how one property is checked for every element of a site
+' Edit this file and re-render (VS Code PlantUML extension: Alt+D for preview)
+
+title check_allowed() – Ablauf
+
+actor "User / Script" as User
+participant "check_allowed()" as F
+participant "IFC Model" as M
+participant "ifcopenshell.util.element" as U
+participant "results\n(List)" as R
+participant "pandas" as P
+
+User -> F : check_allowed(ifcsite_name, pset, property, allowed_values)
+
+== Site finden ==
+F -> M : by_type("IfcSite")
+M --> F : alle IfcSites
+F -> F : filtern: Name == ifcsite_name
+
+alt keine Site gefunden (if not sites)
+    F --> User : print(Error) / return None
+else Site gefunden
+    F -> F : site = sites[0]
+
+    == Elemente sammeln ==
+    F -> U : get_decomposition(site)
+    U --> F : alle Objekte unter der Site (Set)
+    F -> F : nur IfcElement behalten → elements
+
+    == Prüfung pro Element ==
+    loop für jedes Element i in elements
+        F -> U : get_psets(i)
+        U --> F : Psets (Dictionary)
+
+        alt Pset fehlt (KeyError)
+            F -> R : append {GUID, Name, None, "Pset does not exist"}
+            note right of F : continue → nächstes Element
+        else Pset vorhanden
+            alt Property fehlt (KeyError)
+                F -> R : append {GUID, Name, None, "Property Not Found"}
+            else Wert in allowed_values
+                F -> R : append {GUID, Name, Wert, "PASS"}
+            else Wert nicht erlaubt
+                F -> R : append {GUID, Name, Wert, "FAIL"}
+            end
+        end
+    end
+
+    == Ergebnis ==
+    F -> P : pd.DataFrame(results)
+    P --> F : df_check_allowed
+    F --> User : return df_check_allowed
+end
+
+@enduml

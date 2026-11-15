@@ -47,6 +47,50 @@ df = pd.DataFrame(results)
 print(df)
 
 
+def check_allowed(ifcsite_name:str, pset:str, property:str, allowed_values:set):
+    results = [] #this will return the result of matching the property value with the allowed values.
+    sites = [x for x in model.by_type('IfcSite') if x.Name == ifcsite_name] 
+
+    #Check if Site Exists:
+    if not sites:
+        print(f"Error: No IFC site with the name '{ifcsite_name}' found.")
+        return None
+
+    site = sites[0]  # Get the first matching site
+    
+    inside = ifcopenshell.util.element.get_decomposition(site) #This returns to me all the elements under the site. 
+    elements = [e for e in inside if e.is_a("IfcElement")] #Returns IFCElements as a List.
+
+    #Check if Property Set (pset) and property Exists for each element:
+    for i in elements:
+
+        #Check if the Pset exists for the element:
+        try:
+            pset_exists = ifcopenshell.util.element.get_psets(i)[pset] # For each element, it either returns the Pset or raises a KeyError if the Pset doesn't exist.
+
+        except KeyError:
+            results.append({"GUID": i.GlobalId, "Name": i.Name, property: "Pset does not exist", "Check": "Pset does not exist"})
+            continue  # Skip to the next element if the Pset doesn't exist
+
+        #Check if the property exists in the Pset and if its value is in the allowed values:
+        try:
+            pset_properties = pset_exists[property]
+            if pset_properties in allowed_values:
+                results.append({"GUID": i.GlobalId, "Name": i.Name, property: pset_properties, "Check": "PASS"})
+            
+            else:
+                results.append({"GUID": i.GlobalId, "Name": i.Name, property: pset_properties, "Check": "FAIL"})
+
+        #Do this when the Pset exists, but the property does not exist in the Pset:
+        except KeyError:
+            results.append({"GUID": i.GlobalId, "Name": i.Name, property: "Property does not exist", "Check": "None"})
+
+    df_check_allowed = pd.DataFrame(results)
+    return df_check_allowed
+
+
+
+
 
 # print(kostenteilerset)
 
