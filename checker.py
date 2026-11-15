@@ -136,15 +136,15 @@ class Checker:
 def rulecheck(checker, ruleset, output_path="PsetCheck_Report.xlsx"):
     """Runs every rule of the ruleset through the checker and writes ONE Excel report.
 
-    The report has one sheet per check kind (Allowed / Type / Range).
-    The column "Rule" is the row number of the rule in the rules Excel, so you can look it up there.
-    Returns the three result tables as a dict (useful later for the UI).
+    Every rule (= every row of the rules Excel) gets its own sheet.
+    The sheet name starts with the Excel row of the rule, e.g. "2 allowed Kostenteiler".
+    Returns the result tables as a dict {sheet name: DataFrame} (useful later for the UI).
     """
-    #One list per check kind. Each rule's result table gets appended to its list.
-    results = {"allowed": [], "type": [], "range": []}
+    results = {}
 
     for index, row in ruleset.iterrows():
         check = row["check"]
+        excel_row = index + 2  #Excel starts at 1 and row 1 is the header, so the first rule is Excel row 2
 
         if check == "allowed":
             df = checker.check_allowed(row["pset"], row["property"], row["value"])
@@ -153,27 +153,26 @@ def rulecheck(checker, ruleset, output_path="PsetCheck_Report.xlsx"):
         elif check == "range":
             df = checker.check_range(row["pset"], row["property"], row["operator"], row["value"])
         else:
-            print(f"Error: Rule in Excel row {index + 2} has an unknown check '{check}'. Skipped.")
+            print(f"Error: Rule in Excel row {excel_row} has an unknown check '{check}'. Skipped.")
             continue
 
         #None = the check rejected the rule (invalid data type or operator). Nothing to write.
         if df is None or df.empty:
             continue
 
-        df.insert(0, "Rule", index + 2)  #+2: Excel starts at 1 and row 1 is the header, so the first rule is Excel row 2
-        results[check].append(df)
+        #Excel sheet names: max. 31 characters and none of these: [ ] : * ? / \
+        sheet_name = f"{excel_row} {check} {row['property']}"
+        for char in '[]:*?/\\':
+            sheet_name = sheet_name.replace(char, "_")
+        results[sheet_name[:31]] = df
 
-    #Stack the tables of each check kind into one table and write them as sheets of one Excel file.
-    combined = {}
+    #Write every result table into its own sheet of one Excel file.
     with pd.ExcelWriter(output_path) as writer:
-        for check, tables in results.items():
-            if not tables:  #no rules of this kind → no sheet
-                continue
-            combined[check] = pd.concat(tables, ignore_index=True)
-            combined[check].to_excel(writer, sheet_name=check.capitalize(), index=False)
+        for sheet_name, df in results.items():
+            df.to_excel(writer, sheet_name=sheet_name, index=False)
 
     print(f"Report written to {output_path}")
-    return combined
+    return results
 
 
 #Only runs when you start THIS file directly (python checker.py), not when another file imports it.
