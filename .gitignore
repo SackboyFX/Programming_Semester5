@@ -2,3 +2,6 @@
 venv/
 *.ifc
 __pycache__/
+# Check results (contain GUIDs/names from the company model)
+Ruleset Number*.xlsx
+PsetCheck_Report*.xlsx
