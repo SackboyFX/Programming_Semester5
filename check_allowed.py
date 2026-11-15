@@ -52,7 +52,7 @@ def check_allowed(ifcsite_name:str, pset:str, property:str, allowed_values:set):
 
 
 def check_type(ifcsite_name:str, pset:str, property:str, data_type:type):
-    results = [] #this will return the result of matching the property value with the allowed values.
+    results = [] #this will return the result of checking the property value against the expected data type.
     sites = [x for x in model.by_type('IfcSite') if x.Name == ifcsite_name] 
 
     #Check if Site Exists:
@@ -93,15 +93,9 @@ def check_type(ifcsite_name:str, pset:str, property:str, data_type:type):
     return df_check_type
 
 
-def check_range(ifcsite_name:str, pset:str, property:float, conditional:str, min_value:float):
-    results = [] #this will return the result of matching the property value with the allowed values.
-    sites = [x for x in model.by_type('IfcSite') if x.Name == ifcsite_name] 
-
-    #Check if the conditional is a valid type
-    allowed_conditionals = ["<", "<=", ">", ">=", "==", "!="]
-    if conditional not in allowed_conditionals:
-        print(f"Error: Invalid conditional '{conditional}'. Allowed conditionals are: {allowed_conditionals}")
-        return None
+def check_range(ifcsite_name:str, pset:str, property:str, conditional:str, compare_value:float):
+    results = [] #this will return the result of comparing the property value with the compare value.
+    sites = [x for x in model.by_type('IfcSite') if x.Name == ifcsite_name]
 
     #The idea is that we can use the operator module to map the string representation of the conditional to the actual comparison operation. This way, we can dynamically apply the correct comparison based on the user's input.
     operations = {
@@ -112,6 +106,11 @@ def check_range(ifcsite_name:str, pset:str, property:float, conditional:str, min
         "==": operator.eq,
         "!=": operator.ne
     }
+
+    #Check if the conditional is valid (the keys of the operations dictionary are the allowed conditionals):
+    if conditional not in operations:
+        print(f"Error: Invalid conditional '{conditional}'. Allowed conditionals are: {list(operations)}")
+        return None
 
     #Check if Site Exists:
     if not sites:
@@ -137,7 +136,14 @@ def check_range(ifcsite_name:str, pset:str, property:float, conditional:str, min
         #Check if the property exists in the Pset and if its value passes the ruleset:
         try:
             pset_properties = pset_exists[property]
-            if operations[conditional](pset_properties, min_value):
+
+            #Check if the value is a number. Text or None would crash the comparison (TypeError) or give wrong results ("10" > "9" is False).
+            #bool is excluded on purpose: in Python True/False count as 1/0, so True > 0 would pass.
+            if not isinstance(pset_properties, (int, float)) or isinstance(pset_properties, bool):
+                results.append({"GUID": i.GlobalId, "Name": i.Name, property: pset_properties, "Check": "Not a number"})
+                continue  # Skip to the next element, a comparison makes no sense here
+
+            if operations[conditional](pset_properties, compare_value):
                 results.append({"GUID": i.GlobalId, "Name": i.Name, property: pset_properties, "Check": "PASS"})
             
             else:
