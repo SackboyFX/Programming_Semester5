@@ -226,7 +226,32 @@ Ignore CAD junk: `Properties`, `Misc`, `General`, `3D Visualization`, `Geometry`
 - `=` assigns a value, `==` compares. `if x = 5` is a SyntaxError.
 - Chain them: `if 0 < value <= 500:` (= between, used in `check_range`).
 - Combine with `and`, `or`, `not`.
+
+**Operator from text (e.g. `">"` from the rule Excel):**
+
+A `">"` in a variable is just **text** – Python only compares when `>` is written in the code itself (`pset_properties conditional value` → SyntaxError). Translate text → function:
+
+```python
+import operator          # built in, no pip
+
+OPS = {"<": operator.lt, "<=": operator.le, ">": operator.gt,
+       ">=": operator.ge, "==": operator.eq, "!=": operator.ne}
+
+OPS[">"]                 # step 1: look up the text → the function operator.gt
+OPS[">"](5, 0)           # step 2: call it → same as 5 > 0 → True
+
+if conditional not in OPS:                          # validate the input
+    ...
+if OPS[conditional](pset_properties, compare_value):  # the actual comparison
+    ...
+```
+
+- Functions are values: `compare = operator.gt` (no brackets) stores it, `compare(5, 0)` calls it.
+- The dictionary is the short form of an `if conditional == ">": ... elif conditional == "<": ...` chain.
+- Don't use `eval()` for this – it runs any text as code.
+- Check "is it a number?" before `<`, `>`, `<=`, `>=` (`"10" > "9"` is False; `"5" > 3` → TypeError).
 - **Empty check:** `if not my_list:` → True if empty. Works for lists, sets, dicts and strings.
+- **Truthiness:** `if x:` is True for anything with content (`"text"`, `5`, `[1]`) and False for `None`, `""`, `0`, `[]`, `{}`. So `if error:` = "if error contains a message".
 - A list comprehension with no matches gives `[]`, **not** `None` → `[] is None` is False. Check `if not sites:` before using `sites[0]`.
 
 ---

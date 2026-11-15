@@ -61,35 +61,43 @@ class Checker:
 
         return psets[pset][property], None
 
-    def check_allowed(self, pset: str, property: str, allowed_values: set):
+    def check_allowed(self, pset: str, property: str, allowed_values: str):
         """PASS if the property value is in allowed_values."""
         results = []
+
+        split_allowed_values = allowed_values.split("; ") #We split the string into list entries, each separated by "; "
 
         for i in self.elements:
             value, error = self._get_value(i, pset, property)
 
-            if error:
+            if error: #if error contains any value other than None, it means the Pset or property does not exist, so it automatically fills in error in the Check column.
                 results.append({"GUID": i.GlobalId, "Name": i.Name, property: error, "Check": error})
-            elif value in allowed_values:
+            elif value in split_allowed_values:
                 results.append({"GUID": i.GlobalId, "Name": i.Name, property: value, "Check": "PASS"})
             else:
                 results.append({"GUID": i.GlobalId, "Name": i.Name, property: value, "Check": "FAIL"})
 
         return pd.DataFrame(results)
 
-    def check_type(self, pset: str, property: str, data_type: type):
+    def check_type(self, pset: str, property: str, data_type: str):
         """PASS if the property value has the expected data type (e.g. float, str)."""
         results = []
+        data_type = data_type.lower() #This minimizes errors from mistypes as Float or Int
+        data_type_converter = {"str": str, "float": float, "int": int}
+
+        if data_type not in data_type_converter:
+            print("Error: Data Type check failed. Data Type must be one of the following: str, float, int")
+            return None
 
         for i in self.elements:
             value, error = self._get_value(i, pset, property)
 
             if error:
                 results.append({"GUID": i.GlobalId, "Name": i.Name, property: error, "Data Type": "N/A", "Check": error})
-            elif isinstance(value, data_type):
-                results.append({"GUID": i.GlobalId, "Name": i.Name, property: value, "Data Type": data_type.__name__, "Check": "PASS"})
+            elif isinstance(value, data_type_converter[data_type]):
+                results.append({"GUID": i.GlobalId, "Name": i.Name, property: value, "Data Type": data_type_converter[data_type].__name__, "Check": "PASS"})
             else:
-                results.append({"GUID": i.GlobalId, "Name": i.Name, property: value, "Data Type": data_type.__name__, "Check": "FAIL"})
+                results.append({"GUID": i.GlobalId, "Name": i.Name, property: value, "Data Type": data_type_converter[data_type].__name__, "Check": "FAIL"})
 
         return pd.DataFrame(results)
 
@@ -128,10 +136,29 @@ if __name__ == "__main__":
     model = ifcopenshell.open(r"C:\Users\mikek\OneDrive - Hochschule Luzern\Semester 5\DT Programming\Coding Project\Beispiele_IfcOpenShell_Pandas SW4\25.011_GoBau.ifc")
 
     checker = Checker(model, "03 Neu")
-    print(f"{len(checker.elements)} elements found")
+    # print(f"{len(checker.elements)} elements found")
 
-    kostenteilerset = {"WWZ-WV:100%", "ZUG:100%", "WWZ-EW:100%"}
+    # kostenteilerset = {"WWZ-WV:100%", "ZUG:100%", "WWZ-EW:100%"}
 
-    print(checker.check_allowed("GoBau_Ausschreibung", "Kostenteiler", kostenteilerset))
-    print(checker.check_type("GoBau_Menge", "Volumen (m3)", float))
-    print(checker.check_range("GoBau_Menge", "Volumen (m3)", ">", 0))
+    # print(checker.check_allowed("GoBau_Ausschreibung", "Kostenteiler", kostenteilerset))
+    # print(checker.check_type("GoBau_Menge", "Volumen (m3)", float))
+    # print(checker.check_range("GoBau_Menge", "Volumen (m3)", ">", 0))
+
+
+    ruleset = pd.read_excel("PsetCheck_Rules_Template.xlsx", sheet_name="Rules")
+
+    def rulecheck():
+        for index, row in ruleset.iterrows():
+            if row["check"] == "allowed":
+                df_allowed = checker.check_allowed(row["pset"], row["property"], row["value"])
+                df_allowed.to_excel(f"Ruleset Number {index}.xlsx", sheet_name=f"Check Allowed Row {index}")
+
+            elif row["check"] == "type":
+                df_type = checker.check_type(row["pset"], row["property"], row["value"])
+                df_type.to_excel(f"Ruleset Number {index}.xlsx", sheet_name=f"Check Type Row {index}")
+
+            elif row["check"] == "range":
+                df_type = checker.check_range(row["pset"], row["property"], row["operator"], row["value"])
+                df_type.to_excel(f"Ruleset Number {index}.xlsx", sheet_name=f"Check Range Row {index}")
+
+    rulecheck()
