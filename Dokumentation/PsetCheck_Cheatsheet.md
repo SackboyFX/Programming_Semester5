@@ -611,6 +611,13 @@ Order: build `check_type` as a plain function first → once two checks exist, m
 - `All arrays must be of the same length` → dictionary-of-lists with a missing `.append` in one branch.
 - A table value that "can't be right" (e.g. a Kostenteiler on an element that has none) → stale variable from the previous loop round.
 
+**"No module named X" / yellow squiggle under an import → wrong Python:**
+- Bottom right in VS Code = the Python that runs your code (here: `dtprog`, a venv at `C:\venvs\dtprog`)
+- Plain `pip` can install into a *different* Python (check the path in the output!)
+- dtprog has no pip (made with uv) → install with `uv pip install <package>`
+- If there's pip: always `python -m pip install <package>`, never just `pip`
+- Wrong interpreter selected → `Ctrl+Shift+P` → *Python: Select Interpreter*
+
 ---
 
 ## 9. Git routine
