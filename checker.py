@@ -177,10 +177,10 @@ def rulecheck(checker, ruleset, output_path="PsetCheck_Report.xlsx"):
 
 #Only runs when you start THIS file directly (python checker.py), not when another file imports it.
 if __name__ == "__main__":
-    model = ifcopenshell.open(r"C:\Users\mikek\OneDrive - Hochschule Luzern\Semester 5\DT Programming\Coding Project\Beispiele_IfcOpenShell_Pandas SW4\25.011_GoBau.ifc")
+    model = ifcopenshell.open(r"C:\Users\MikeKhayat\OneDrive - Hochschule Luzern\Semester 5\DT Programming\Coding Project\Beispiele_IfcOpenShell_Pandas SW4\25.011_GoBau.ifc")
 
     checker = Checker(model, "03 Neu")
 
     ruleset = pd.read_excel("PsetCheck_Rules_Template.xlsx", sheet_name="Rules")
 
-    rulecheck(checker, ruleset)
+    print(rulecheck(checker, ruleset))
