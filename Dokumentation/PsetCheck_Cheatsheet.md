@@ -1,7 +1,7 @@
 # PsetCheck – Cheat Sheet
 
 Living reference for the PsetCheck project. Updated as new things come up.
-*Last updated: 15 Nov 2026*
+*Last updated: 17 Nov 2026*
 
 ---
 
@@ -533,6 +533,66 @@ ui.run()
 | `.classes("max-w-full")` | passes CSS styling classes |
 | `lambda: ui.notify("x")` | mini one-line function to run later; use `def` for anything longer |
 
+### 5b. Uploads: bytes, not paths ⭐
+In a web app the file comes from the browser over the network → you get **bytes**, no path on disk. `ifcopenshell.open(path)` used to read + decode for you; now you do it by hand.
+```python
+data = await document.file.read()                          # bytes (await = wait until all arrived, app doesn't freeze)
+model = ifcopenshell.file.from_string(data.decode())       # IFC is TEXT  → .decode() → text
+ruleset = pd.read_excel(io.BytesIO(data), sheet_name="Rules")  # xlsx is BINARY → NO decode, BytesIO = "pretend these bytes are a file"
+```
+- Not sure what you got? `print(type(data))` · hover a function to see what it expects · read the error (`expected str, got bytes`)
+
+### 5c. Buttons and functions
+```python
+ui.button("Check Ruleset", on_click=runcheck)     # function NAME, no brackets → "call this later, when clicked"
+ui.button("Check Ruleset", on_click=runcheck())   # WRONG: runs at startup, hands the button the result
+```
+- `on_click` calls the function **without arguments** → `def runcheck():` with empty brackets
+- Inside, just read `model`, `ruleset`, `sitelocation` → they are read **at click time** (= the uploaded files, not the `None` from startup)
+- Passing them in at startup freezes the `None`s
+- A return value from a click goes nowhere → put the result **into the page** instead
+- Type hints (`x: str`) only in the `def` line, never in a call
+- `async def` only if the function uses `await`
+- Check first: `if model is None or ruleset is None:` → `ui.notify(...)` + `return`
+
+### 5d. Where new elements appear: containers ⭐
+NiceGUI puts elements created in a click **where the click came from** (e.g. inside the dropdown). Fix: an empty box you control.
+```python
+ui.button("Check Ruleset", on_click=runcheck)
+table_area = ui.column()        # not indented = runs once at start → empty box below the button
+
+def generatetable(df):
+    table_area.clear()          # take the old table out
+    with table_area:            # everything created in this block goes INTO the box
+        ui.table.from_pandas(df).classes("max-h-100")
+```
+- Picture frame: hang it once (`ui.column()`), swap the picture (`clear` + `with`)
+- Same trick stops a second click from stacking tables / dropdowns
+
+### 5e. Lambda in a loop: the `x=x` trick ⭐
+```python
+with ui.dropdown_button("Select Ruleset", auto_close=True):
+    for tablename, tabledf in results.items():
+        ui.item(tablename, on_click=lambda tablename=tablename: generatetable(results[tablename]))
+```
+- `lambda` = code packed to run **when clicked** (without it, all tables are generated immediately)
+- Without `=tablename` the lambda only remembers "look up `tablename` when clicked" → by then the loop is over → every item shows the **last** table
+- `tablename=tablename` = default value, fixed **when the lambda is created** → each item keeps its own name
+- Left `tablename` = the lambda's own variable, right `tablename` = loop value right now
+- Note "whatever is on the whiteboard" vs. copying the text onto the note now
+
+### 5f. Dictionaries: keys, values, items
+`rulecheck` returns `{sheet name: DataFrame}`:
+```python
+results = rulecheck(checker, ruleset)
+results["2 allowed Kostenteiler"]           # one table
+list(results.keys())                         # only the names
+results.values()                             # only the DataFrames
+for name, df in results.items():             # both as pairs (same unpacking as index, row)
+```
+
+**Imports:** `from checker import Checker, rulecheck` (clear) · `import checker` → `checker.Checker` · `from checker import *` works but hides where names come from
+
 ---
 
 ## 6. Text vs binary files
@@ -610,6 +670,16 @@ Order: build `check_type` as a plain function first → once two checks exist, m
 - `'set' object has no attribute 'append'` → sets use `.add()`.
 - `All arrays must be of the same length` → dictionary-of-lists with a missing `.append` in one branch.
 - A table value that "can't be right" (e.g. a Kostenteiler on an element that has none) → stale variable from the previous loop round.
+
+**"No module named X" / yellow squiggle under an import → wrong Python:**
+- Bottom right in VS Code = the Python that runs your code (here: `dtprog`, a venv at `C:\venvs\dtprog`)
+- Plain `pip` can install into a *different* Python (check the path in the output!)
+- dtprog has no pip (made with uv) → install with `uv pip install <package>`
+- **New PC / no venv:** from the project folder run `powershell -ExecutionPolicy Bypass -File .\setup_env.ps1` (creates `C:\venvs\dtprog`, installs requirements.txt, sets VS Code) → then `Ctrl+Shift+P` → *Select Interpreter* → *Enter interpreter path* → `C:\venvs\dtprog\Scripts\python.exe`
+- **New package:** `uv pip install --python C:\venvs\dtprog\Scripts\python.exe <name>` + add it to requirements.txt + re-run the script on the other PC
+- venv never inside OneDrive (it breaks when syncing)
+- If there's pip: always `python -m pip install <package>`, never just `pip`
+- Wrong interpreter selected → `Ctrl+Shift+P` → *Python: Select Interpreter*
 
 ---
 
