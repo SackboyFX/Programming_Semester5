@@ -1,6 +1,7 @@
 import operator
 
 import ifcopenshell
+import ifcopenshell.api.pset
 import ifcopenshell.util.element
 import pandas as pd
 
@@ -167,12 +168,10 @@ def rulecheck(checker, ruleset):
     return results
 
 def savecheck(rulecheck_results, output_path):
-    """Saves the result from the function rulecheck as an Excel file. 
+    """Saves the results of rulecheck() as one Excel file, one sheet per rule.
 
-    rulecheck_results: the table from the function rulecheck is needed to create the file. it should be used here as a parameter.
-    Every rule (= every row of the rules Excel) gets its own sheet.
-    The sheet name starts with the Excel row of the rule, e.g. "2 allowed Kostenteiler".
-    
+    rulecheck_results: the dict returned by rulecheck() {sheet name: DataFrame}.
+    output_path: a file path, or an io.BytesIO() to keep the file in memory (for the download button).
     """
     if not rulecheck_results:
         print("Nothing to save.")
@@ -185,6 +184,94 @@ def savecheck(rulecheck_results, output_path):
 
     print(f"Report written to {output_path}")
 
+def summarize(rulecheck_results):
+    """Counts the results of every rule: one row per rule, for a quick overview in the app.
+
+    rulecheck_results: the dict returned by rulecheck() {sheet name: DataFrame}.
+    Returns a DataFrame with the columns Rule | PASS | FAIL | Missing | Not a number | Total.
+    "Missing" = the Pset or the property does not exist on the element.
+    """
+    rows = []
+
+    for sheet_name, df in rulecheck_results.items():
+        counts = df["Check"].value_counts()  #e.g. PASS: 824, Property does not exist: 173
+
+        missing = counts.get("Pset does not exist", 0) + counts.get("Property does not exist", 0)
+        rows.append({
+            "Rule": sheet_name,
+            "PASS": int(counts.get("PASS", 0)),
+            "FAIL": int(counts.get("FAIL", 0)),
+            "Missing": int(missing),
+            "Not a number": int(counts.get("Not a number", 0)),
+            "Total": len(df),
+        })
+
+    return pd.DataFrame(rows)
+
+
+def writeback(checker, rulecheck_results, pset_name="PsetCheck"):
+    """Writes the check results back into the model as one Pset per element.
+
+    checker: the Checker the rules were run with. Its model (checker.model) is CHANGED here.
+    rulecheck_results: the dict returned by rulecheck() {sheet name: DataFrame}.
+
+    Every checked element gets one Pset "PsetCheck" with
+    - "Status": "PASS" if every rule passed, otherwise e.g. "FAIL (2 of 5)". The 3D view colours from this.
+    - one property per rule, named like the report sheet (e.g. "4 range Volumen (m3)"),
+      with the result: "PASS", "FAIL (value: 0.0)", "Property does not exist", ...
+
+    Running it again replaces the old PsetCheck, so an element never gets two of them.
+    The model is NOT saved here: afterwards use checker.model.write(path) or checker.model.to_string().
+    Returns the number of elements that got a PsetCheck.
+    """
+    model = checker.model
+
+    #Step 1: collect the results per element instead of per rule.
+    #collected = {GUID: {rule name: result text, ...}, ...}
+    collected = {}
+
+    for sheet_name, df in rulecheck_results.items():   #every rule (= every sheet of the report)
+        for index, row in df.iterrows():                #every element checked by that rule
+            guid = row["GUID"]
+
+            if guid not in collected:                   #first time we see this element: give it an empty dict
+                collected[guid] = {}
+
+            #PASS and the error texts are clear on their own. For FAIL and "Not a number" the value shows WHY.
+            if row["Check"] in ("FAIL", "Not a number"):
+                collected[guid][sheet_name] = f"{row['Check']} (value: {row['Value']})"
+            else:
+                collected[guid][sheet_name] = str(row["Check"])
+
+    #Step 2: write one Pset per element.
+    for guid, rule_results in collected.items():
+        element = model.by_guid(guid)
+
+        #Status: count every rule that did not pass.
+        not_passed = sum(1 for result in rule_results.values() if result != "PASS")
+        if not_passed == 0:
+            status = "PASS"
+        else:
+            status = f"FAIL ({not_passed} of {len(rule_results)})"
+
+        #Status first, so it is the first line in the viewer. Then the rules.
+        properties = {"Status": status}
+        properties.update(rule_results)
+
+        #Already checked before (e.g. "Check" clicked twice)? Remove the old PsetCheck first,
+        #otherwise the element would get a second one.
+        old_psets = ifcopenshell.util.element.get_psets(element)
+        if pset_name in old_psets:
+            old_pset = model.by_id(old_psets[pset_name]["id"])
+            ifcopenshell.api.pset.remove_pset(model, product=element, pset=old_pset)
+
+        new_pset = ifcopenshell.api.pset.add_pset(model, product=element, name=pset_name)
+        ifcopenshell.api.pset.edit_pset(model, pset=new_pset, properties=properties)
+
+    print(f"PsetCheck written to {len(collected)} elements")
+    return len(collected)
+
+
 #Only runs when you start THIS file directly 
 if __name__ == "__main__":
     model = ifcopenshell.open(r"C:\Users\mikek\OneDrive - Hochschule Luzern\Semester 5\DT Programming\Coding Project\Beispiele_IfcOpenShell_Pandas SW4\25.011_GoBau.ifc")
@@ -193,10 +280,11 @@ if __name__ == "__main__":
 
     ruleset = pd.read_excel("PsetCheck_Rules_Template.xlsx", sheet_name="Rules")
 
-    output_path = r"C:\Users\mikek\Downloads\Check_Results.xlsx"
+    results = rulecheck(checker, ruleset)
 
-    rulecheck_df = rulecheck(checker, ruleset)
+    print(summarize(results))
 
-    print(rulecheck_df)
+    savecheck(results, r"C:\Users\mikek\Downloads\Check_Results.xlsx")
 
-    savecheck(rulecheck_df, output_path)
+    writeback(checker, results)
+    checker.model.write(r"C:\Users\mikek\Downloads\25.011_GoBau_checked.ifc")  #new name, never overwrite the original

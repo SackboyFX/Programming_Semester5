@@ -1,64 +1,101 @@
-from nicegui import ui, events, app
+from nicegui import ui, app
 import ifcopenshell
 import ifcopenshell.util
 import ifcopenshell.util.element
-from checker import Checker, rulecheck, savecheck
+from checker import Checker, rulecheck, savecheck, summarize, writeback
 import pandas as pd
 import io
 import datetime
 
 
-model = None
-ruleset = None
+model = None            # the uploaded IFC model
+ifc_name = None         # its file name, for the download name of the checked IFC
+ruleset = None          # the uploaded rules Excel (sheet "Rules")
+checker = None          # the Checker of the last check, needed for the write-back
+results = None          # the results of the last check {sheet name: DataFrame}
 sitelocation = "03 Neu"
 
 ######################################################### All Functions come here ###############################################################
 
 #IFC Upload: Accept Upload Function
 async def load_ifc(document):
-    data = await document.file.read()                         # the file's bytes
-    global model
-    model = ifcopenshell.file.from_string(data.decode())  # decoding the bytes to a string and opening it directly from memory, setting it as the variable model
-    print("A file arrived:", document.file.name)
+    global model, ifc_name
+    data = await document.file.read()                       # the file's bytes
+    model = ifcopenshell.file.from_string(data.decode())    # IFC is text: decode the bytes and open the model directly from memory
+    ifc_name = document.file.name
+    print("A file arrived:", ifc_name)
 
 #IFC Upload: Reject Upload Function
 async def reject_ifc(document):
-    ui.notify(f'File rejected - Only .IFC files allowed')
+    ui.notify('File rejected - Only .IFC files allowed')
 
 #Excel Upload: Accept Upload Function
 async def load_excel_ruleset(excel):
-    data = await excel.file.read()                         # the file's bytes
     global ruleset
-    ruleset = pd.read_excel(io.BytesIO(data), sheet_name="Rules")  # decoding the bytes to a string and opening it directly from memory, setting it as the variable model
+    data = await excel.file.read()                                  # the file's bytes
+    ruleset = pd.read_excel(io.BytesIO(data), sheet_name="Rules")   # xlsx is binary: no decode, BytesIO makes the bytes look like a file
     print("A file arrived:", excel.file.name)
 
 #Excel Upload: Reject Upload Function
 async def reject_excel_ruleset(excel):
-    ui.notify(f'File rejected - Only .xlsx files allowed')
+    ui.notify('File rejected - Only .xlsx files allowed')
 
-#Check Ruleset Button: Run the necessary rulecheck functions
+#Check Ruleset Button: run all rules, then show the summary, the table dropdown and the download buttons
 def runcheck():
-    model_check = Checker(model, sitelocation)
-    dftable = rulecheck(model_check,ruleset)
-    
-    with ui.dropdown_button("Select Ruleset", auto_close=True):   
-        for tablename, tabledf in dftable.items():
-            ui.item(tablename, on_click=lambda tablename=tablename: generatetable(dftable[str(tablename)]))
-            #It’s a default value, the same as def f(x=5):. That value gets fixed at the moment the lambda is created, so each item gets its own copy of the name.
-            #Why it went wrong without it. Without =tablename, the lambda doesn’t store a value. It only stores the instruction “look up the variable tablename when clicked.” The loop reuses that one variable:
-    
-    
-    #Creating download button
-    buffer = io.BytesIO()                 # an empty "file" that lives in memory
-    savecheck(dftable, buffer)            # ExcelWriter writes into it instead of onto disk
-    data = buffer.getvalue()              # take the finished bytes out
-    ui.button('Save File', on_click=lambda: ui.download.content(data, f"Rule Check {datetime.date.today()}.xlsx", ".xlsx"))
+    global checker, results
 
-#Generating Summary Table for table_area
+    if model is None or ruleset is None:
+        ui.notify("Upload an IFC and a ruleset first")
+        return
+
+    checker = Checker(model, sitelocation)
+    results = rulecheck(checker, ruleset)
+
+    if not results:
+        ui.notify("No rule could be checked - look at the terminal for errors")
+        return
+
+    #Summary: one row per rule with the counts
+    summary_area.clear()
+    with summary_area:
+        ui.markdown("## Summary")
+        ui.table.from_pandas(summarize(results))
+
+    #Dropdown to look at the full table of one rule
+    dropdown_area.clear()
+    with dropdown_area:
+        with ui.dropdown_button("Select Ruleset", auto_close=True):
+            for tablename in results:
+                # tablename=tablename freezes the value for each item (otherwise every item shows the last table)
+                ui.item(tablename, on_click=lambda tablename=tablename: generatetable(results[tablename]))
+
+    #Download buttons
+    download_area.clear()
+    with download_area:
+        with ui.row():
+            ui.button("Download Report (Excel)", on_click=download_report)
+            ui.button("Download checked IFC", on_click=download_ifc)
+
+    table_area.clear()  # remove the table of an earlier check
+
+#Show the full result table of one rule in table_area
 def generatetable(dftable):
     table_area.clear()          # remove the old table
     with table_area:            # "everything created in here goes into the box"
         ui.table.from_pandas(dftable).classes("max-h-100")
+
+#Download Report button: write the Excel into memory and hand the bytes to the download
+def download_report():
+    buffer = io.BytesIO()                 # an empty "file" that lives in memory
+    savecheck(results, buffer)            # ExcelWriter writes into it instead of onto disk
+    ui.download.content(buffer.getvalue(), f"Rule Check {datetime.date.today()}.xlsx")
+
+#Download checked IFC button: write PsetCheck into the model, then download the model as a new IFC
+def download_ifc():
+    writeback(checker, results)                         # adds/replaces PsetCheck on every checked element
+    data = checker.model.to_string().encode()           # model → text → bytes (the upload, in reverse)
+    name = ifc_name.removesuffix(".ifc") + "_checked.ifc"
+    ui.download.content(data, name)
 
 
 
@@ -67,20 +104,25 @@ def generatetable(dftable):
 #Upload IFC UI
 ui.markdown("""# Upload IFC""")
 ui.upload(on_upload=load_ifc,
-          on_rejected=reject_ifc
+          on_rejected=reject_ifc,
+          auto_upload=True,      # upload right after choosing the file, no extra click
           ).props('accept=.ifc')
 
 #Upload Excel Ruleset UI
 ui.markdown("""# Upload Ruleset""")
 ui.upload(on_upload=load_excel_ruleset,
-          on_rejected=reject_excel_ruleset
+          on_rejected=reject_excel_ruleset,
+          auto_upload=True,
           ).props('accept=.xlsx')
 
 #Check Ruleset button UI
 ui.button("Check Ruleset", on_click=runcheck)
 
-#Show Table area, appears beneath Ruleset Button.
-table_area = ui.column()        # top level, below your button: an empty "box"
+#Empty boxes, filled by runcheck() after a check, in this order below the button
+summary_area = ui.column()      # summary table
+download_area = ui.column()     # download buttons
+dropdown_area = ui.column()     # dropdown to pick one rule
+table_area = ui.column()        # full table of the picked rule
 
 
 
@@ -89,4 +131,3 @@ table_area = ui.column()        # top level, below your button: an empty "box"
 
 app.native.settings['ALLOW_DOWNLOADS'] = True
 ui.run(native=True)
-
