@@ -3,6 +3,7 @@ import operator
 import ifcopenshell
 import ifcopenshell.util.element
 import pandas as pd
+import ifcopenshell.api.pset
 
 
 class Checker:
@@ -96,6 +97,7 @@ class Checker:
 
             if error:
                 results.append({"GUID": i.GlobalId, "Name": i.Name, "Pset": pset, "Property": property, "Value": error, "Data Type": "N/A", "Check": error})
+
             elif isinstance(value, data_type_converter[data_type]):
                 results.append({"GUID": i.GlobalId, "Name": i.Name, "Pset": pset, "Property": property, "Value": value, "Data Type": data_type_converter[data_type].__name__, "Check": "PASS"})
             else:
@@ -185,6 +187,25 @@ def savecheck(rulecheck_results, output_path):
 
     print(f"Report written to {output_path}")
 
+def writeback(checker, rulecheck_results):
+    collected = {}
+
+    for sheet_name, df in rulecheck_results.items():
+        for index, row in df.iterrows():
+            guid = row["GUID"]
+            if guid not in collected:
+                collected[guid] = {}
+
+            collected[guid][sheet_name] = row["Check"]
+
+    for guid, new_properties in collected.items():
+        element = checker.model.by_guid(guid)
+        custom_pset = ifcopenshell.api.pset.add_pset(checker.model, product=element, name="PsetCheck")
+        ifcopenshell.api.pset.edit_pset(checker.model, pset=custom_pset, properties=new_properties)
+    print("writeback has been created")
+    return model.write("25.011_GoBau_checked.ifc")
+
+
 #Only runs when you start THIS file directly 
 if __name__ == "__main__":
     model = ifcopenshell.open(r"C:\Users\mikek\OneDrive - Hochschule Luzern\Semester 5\DT Programming\Coding Project\Beispiele_IfcOpenShell_Pandas SW4\25.011_GoBau.ifc")
@@ -195,8 +216,12 @@ if __name__ == "__main__":
 
     output_path = r"C:\Users\mikek\Downloads\Check_Results.xlsx"
 
-    rulecheck_df = rulecheck(checker, ruleset)
+    print(checker.check_allowed("GoBau_Ausschreibung","Kostenteiler","ZUG:100%; WWZ-EW:100%; WWZ-WV:100%"))
 
-    print(rulecheck_df)
+    writeback(checker, rulecheck(checker,ruleset))
 
-    savecheck(rulecheck_df, output_path)
+    # rulecheck_df = rulecheck(checker, ruleset)
+
+    # print(rulecheck_df)
+
+    # savecheck(rulecheck_df, output_path)
