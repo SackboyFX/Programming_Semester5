@@ -185,7 +185,7 @@ def savecheck(rulecheck_results, output_path):
 
     print(f"Report written to {output_path}")
 
-#Only runs when you start THIS file directly (python checker.py), not when another file imports it.
+#Only runs when you start THIS file directly 
 if __name__ == "__main__":
     model = ifcopenshell.open(r"C:\Users\mikek\OneDrive - Hochschule Luzern\Semester 5\DT Programming\Coding Project\Beispiele_IfcOpenShell_Pandas SW4\25.011_GoBau.ifc")
 

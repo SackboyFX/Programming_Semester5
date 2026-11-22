@@ -15,7 +15,3 @@ from nicegui import ui
 #     ui.item('Item 2', on_click=lambda: ui.notify('You clicked item 2'))
 
 # ui.run()
-
-dic1 = {"mouse": "hello"}
-
-print(dic1["mouse"])
