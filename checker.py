@@ -133,11 +133,9 @@ class Checker:
         return pd.DataFrame(results)
 
 
-def rulecheck(checker, ruleset, output_path="PsetCheck_Report.xlsx"):
-    """Runs every rule of the ruleset through the checker and writes ONE Excel report.
+def rulecheck(checker, ruleset):
+    """Runs every rule of the ruleset through the checker.
 
-    Every rule (= every row of the rules Excel) gets its own sheet.
-    The sheet name starts with the Excel row of the rule, e.g. "2 allowed Kostenteiler".
     Returns the result tables as a dict {sheet name: DataFrame} (useful later for the UI).
     """
     results = {}
@@ -164,23 +162,41 @@ def rulecheck(checker, ruleset, output_path="PsetCheck_Report.xlsx"):
         sheet_name = f"{excel_row} {check} {row['property']}"
         for char in '[]:*?/\\':
             sheet_name = sheet_name.replace(char, "_")
-        results[sheet_name[:31]] = df
+        results[sheet_name[:31]] = df        
+
+    return results
+
+def savecheck(rulecheck_results, output_path):
+    """Saves the result from the function rulecheck as an Excel file. 
+
+    rulecheck_results: the table from the function rulecheck is needed to create the file. it should be used here as a parameter.
+    Every rule (= every row of the rules Excel) gets its own sheet.
+    The sheet name starts with the Excel row of the rule, e.g. "2 allowed Kostenteiler".
+    
+    """
+    if not rulecheck_results:
+        print("Nothing to save.")
+        return
 
     #Write every result table into its own sheet of one Excel file.
     with pd.ExcelWriter(output_path) as writer:
-        for sheet_name, df in results.items():
+        for sheet_name, df in rulecheck_results.items():
             df.to_excel(writer, sheet_name=sheet_name, index=False)
 
     print(f"Report written to {output_path}")
-    return results
-
 
 #Only runs when you start THIS file directly (python checker.py), not when another file imports it.
 if __name__ == "__main__":
-    model = ifcopenshell.open(r"C:\Users\MikeKhayat\OneDrive - Hochschule Luzern\Semester 5\DT Programming\Coding Project\Beispiele_IfcOpenShell_Pandas SW4\25.011_GoBau.ifc")
+    model = ifcopenshell.open(r"C:\Users\mikek\OneDrive - Hochschule Luzern\Semester 5\DT Programming\Coding Project\Beispiele_IfcOpenShell_Pandas SW4\25.011_GoBau.ifc")
 
     checker = Checker(model, "03 Neu")
 
     ruleset = pd.read_excel("PsetCheck_Rules_Template.xlsx", sheet_name="Rules")
 
-    print(rulecheck(checker, ruleset))
+    output_path = r"C:\Users\mikek\Downloads\Check_Results.xlsx"
+
+    rulecheck_df = rulecheck(checker, ruleset)
+
+    print(rulecheck_df)
+
+    savecheck(rulecheck_df, output_path)
