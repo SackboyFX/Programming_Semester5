@@ -1,10 +1,11 @@
-from nicegui import ui, events
+from nicegui import ui, events, app
 import ifcopenshell
 import ifcopenshell.util
 import ifcopenshell.util.element
 from checker import Checker, rulecheck, savecheck
 import pandas as pd
 import io
+import datetime
 
 
 model = None
@@ -45,6 +46,13 @@ def runcheck():
             ui.item(tablename, on_click=lambda tablename=tablename: generatetable(dftable[str(tablename)]))
             #It’s a default value, the same as def f(x=5):. That value gets fixed at the moment the lambda is created, so each item gets its own copy of the name.
             #Why it went wrong without it. Without =tablename, the lambda doesn’t store a value. It only stores the instruction “look up the variable tablename when clicked.” The loop reuses that one variable:
+    
+    
+    #Creating download button
+    buffer = io.BytesIO()                 # an empty "file" that lives in memory
+    savecheck(dftable, buffer)            # ExcelWriter writes into it instead of onto disk
+    data = buffer.getvalue()              # take the finished bytes out
+    ui.button('Save File', on_click=lambda: ui.download.content(data, f"Rule Check {datetime.date.today()}.xlsx", ".xlsx"))
 
 #Generating Summary Table for table_area
 def generatetable(dftable):
@@ -74,5 +82,11 @@ ui.button("Check Ruleset", on_click=runcheck)
 #Show Table area, appears beneath Ruleset Button.
 table_area = ui.column()        # top level, below your button: an empty "box"
 
-ui.run()
+
+
+
+####################################################  Setup #########################################################################################
+
+app.native.settings['ALLOW_DOWNLOADS'] = True
+ui.run(native=True)
 
