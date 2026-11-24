@@ -18,6 +18,11 @@ from nicegui import ui
 IFC_PATH = r"C:\Users\mikek\OneDrive - Hochschule Luzern\Semester 5\DT Programming\Coding Project\Beispiele_IfcOpenShell_Pandas SW4\25.011_GoBau.ifc"
 SKIP_CLASSES = []   # e.g. ["IfcEarthworksFill"] if one class makes it too slow
 
+# How fine curves are cut into triangles. ifcopenshell's default is 0.001 m (1 mm!) - far too fine for a road model.
+# 0.05 m = a curve may be off by up to 5 cm: invisible at road scale, but MUCH fewer triangles and faster.
+LINEAR_DEFLECTION = 0.05    # metres
+ANGULAR_DEFLECTION = 0.5    # radians (default)
+
 COLOURS = {"PASS": "#3F8A4A", "FAIL": "#C0392B", "NONE": "#A0A0A0"}
 
 
@@ -35,11 +40,14 @@ def build_figure(model):
     """Triangulates all IfcElements and merges them into ONE mesh per colour (fast to draw)."""
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)   # every element at its real position
+    settings.set("mesher-linear-deflection", LINEAR_DEFLECTION)
+    settings.set("mesher-angular-deflection", ANGULAR_DEFLECTION)
 
     elements = [e for e in model.by_type("IfcElement") if not any(e.is_a(c) for c in SKIP_CLASSES)]
 
     # one bucket per colour: all points and all triangles of that colour
     buckets = {key: {"verts": [], "faces": [], "count": 0} for key in COLOURS}
+    per_class = {}   # IFC class → [elements, triangles], to see which class is the heavy one
 
     start = time.time()
     iterator = ifcopenshell.geom.iterator(settings, model, multiprocessing.cpu_count(), include=elements)
@@ -50,7 +58,12 @@ def build_figure(model):
             verts = np.array(shape.geometry.verts).reshape(-1, 3)   # points x, y, z
             faces = np.array(shape.geometry.faces).reshape(-1, 3)   # triangles: 3 point numbers each
 
-            bucket = buckets[get_status(model.by_id(shape.id))]
+            element = model.by_id(shape.id)
+            stats = per_class.setdefault(element.is_a(), [0, 0])
+            stats[0] += 1
+            stats[1] += len(faces)
+
+            bucket = buckets[get_status(element)]
             faces = faces + bucket["count"]   # point numbers continue after the points already in the bucket
             bucket["verts"].append(verts)
             bucket["faces"].append(faces)
@@ -62,6 +75,10 @@ def build_figure(model):
             if not iterator.next():
                 break
     geom_time = time.time() - start
+
+    print("Heaviest classes (elements, triangles):")
+    for ifc_class, (count, tris) in sorted(per_class.items(), key=lambda x: -x[1][1])[:8]:
+        print(f"  {ifc_class:30} {count:5} elements  {tris:10,} triangles")
 
     # Swiss coordinates are huge (2'600'000 / 1'200'000): move everything near 0 so zooming stays smooth
     all_verts = [v for b in buckets.values() for v in b["verts"]]
