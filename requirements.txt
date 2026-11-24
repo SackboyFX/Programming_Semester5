@@ -6,4 +6,4 @@ tzdata==2026.4
 ifcopenshell
 openpyxl
 streamlit
-nicegui
+niceguiplotly
