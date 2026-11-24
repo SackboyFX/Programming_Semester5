@@ -19,9 +19,9 @@ IFC_PATH = r"C:\Users\mikek\OneDrive - Hochschule Luzern\Semester 5\DT Programmi
 SKIP_CLASSES = []   # e.g. ["IfcEarthworksFill"] if one class makes it too slow
 
 # How fine curves are cut into triangles. ifcopenshell's default is 0.001 m (1 mm!) - far too fine for a road model.
-# 0.05 m = a curve may be off by up to 5 cm: invisible at road scale, but MUCH fewer triangles and faster.
-LINEAR_DEFLECTION = 0.05    # metres
-ANGULAR_DEFLECTION = 0.5    # radians (default)
+# 0.5 m = a curve may be off by up to 50 cm: fine for a general view, MUCH fewer triangles.
+LINEAR_DEFLECTION = 0.5     # metres
+ANGULAR_DEFLECTION = 1.0    # radians
 
 # Skip the cutting/subtracting of volumes (openings, "body minus trench"). These boolean operations are usually
 # the slowest part. The shapes may look slightly wrong (e.g. no holes), which is fine for a general view.
