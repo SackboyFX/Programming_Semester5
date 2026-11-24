@@ -3,6 +3,7 @@ import operator
 import ifcopenshell
 import ifcopenshell.api.pset
 import ifcopenshell.api.style
+import ifcopenshell.api.group
 import ifcopenshell.util.element
 import pandas as pd
 
@@ -233,7 +234,15 @@ def _get_colour_style(model, status):
     return style
 
 
-def writeback(checker, rulecheck_results, pset_name="PsetCheck", colour=True):
+def _get_group(model, name):
+    """Returns the IfcGroup with this name, creating it once if it doesn't exist yet."""
+    for group in model.by_type("IfcGroup"):
+        if group.Name == name:
+            return group
+    return ifcopenshell.api.group.add_group(model, name=name)
+
+
+def writeback(checker, rulecheck_results, pset_name="PsetCheck", colour=True, groups=True):
     """Writes the check results back into the model as one Pset per element.
 
     checker: the Checker the rules were run with. Its model (checker.model) is CHANGED here.
@@ -247,6 +256,9 @@ def writeback(checker, rulecheck_results, pset_name="PsetCheck", colour=True):
     colour=True also paints every checked element in the model: red if Status is FAIL, green if PASS.
     Any IFC viewer (BIMcollab, Solibri, usBIM) then shows the result in 3D, without any geometry work in Python.
     Note: the original colours are replaced in the model (only in the downloaded copy, the original file stays).
+
+    groups=True also puts every checked element into one of two IFC groups, "PsetCheck FAIL" or "PsetCheck PASS".
+    In a viewer (e.g. BIMvision: Groups → select "PsetCheck FAIL" → Hide unselected) you then see only the failures.
 
     Running it again replaces the old PsetCheck, so an element never gets two of them.
     The model is NOT saved here: afterwards use checker.model.write(path) or checker.model.to_string().
@@ -275,6 +287,9 @@ def writeback(checker, rulecheck_results, pset_name="PsetCheck", colour=True):
             else:
                 collected[guid][sheet_name] = str(row["Check"])
 
+    #Elements per status, for the groups at the end
+    by_status = {"PASS": [], "FAIL": []}
+
     #Step 2: write one Pset per element.
     for guid, rule_results in collected.items():
         element = model.by_guid(guid)
@@ -300,12 +315,24 @@ def writeback(checker, rulecheck_results, pset_name="PsetCheck", colour=True):
         new_pset = ifcopenshell.api.pset.add_pset(model, product=element, name=pset_name)
         ifcopenshell.api.pset.edit_pset(model, pset=new_pset, properties=properties)
 
+        by_status["PASS" if status == "PASS" else "FAIL"].append(element)
+
         #Step 3: paint the element. Its geometry ("representations") gets the red or green style.
         #Replaces the element's previous colour; elements without geometry are skipped.
         if colour and element.Representation:
             style = colour_styles["PASS" if status == "PASS" else "FAIL"]
             for representation in element.Representation.Representations:
                 ifcopenshell.api.style.assign_representation_styles(model, shape_representation=representation, styles=[style])
+
+    #Step 4: groups. First take every checked element out of both groups (an element that FAILed in an
+    #earlier run may PASS now), then add each element to the group of its current status.
+    if groups:
+        checked = by_status["PASS"] + by_status["FAIL"]
+        for status, elements in by_status.items():
+            group = _get_group(model, f"{pset_name} {status}")
+            ifcopenshell.api.group.unassign_group(model, products=checked, group=group)
+            if elements:
+                ifcopenshell.api.group.assign_group(model, products=elements, group=group)
 
     print(f"PsetCheck written to {len(collected)} elements")
     return len(collected)
