@@ -2,6 +2,7 @@ import operator
 
 import ifcopenshell
 import ifcopenshell.api.pset
+import ifcopenshell.api.style
 import ifcopenshell.util.element
 import pandas as pd
 
@@ -209,7 +210,30 @@ def summarize(rulecheck_results):
     return pd.DataFrame(rows)
 
 
-def writeback(checker, rulecheck_results, pset_name="PsetCheck"):
+#Colours for the viewer (RGB from 0 to 1): red = at least one rule failed, green = all rules passed
+STATUS_COLOURS = {
+    "FAIL": (0.80, 0.15, 0.15),
+    "PASS": (0.20, 0.60, 0.25),
+}
+
+
+def _get_colour_style(model, status):
+    """Returns the surface style "PsetCheck PASS" / "PsetCheck FAIL", creating it once if it doesn't exist yet."""
+    name = f"PsetCheck {status}"
+    for style in model.by_type("IfcSurfaceStyle"):
+        if style.Name == name:
+            return style  #already created by an earlier run: reuse it instead of making a duplicate
+
+    red, green, blue = STATUS_COLOURS[status]
+    style = ifcopenshell.api.style.add_style(model, name=name)
+    ifcopenshell.api.style.add_surface_style(model, style=style, ifc_class="IfcSurfaceStyleShading", attributes={
+        "SurfaceColour": {"Name": None, "Red": red, "Green": green, "Blue": blue},
+        "Transparency": 0.0,
+    })
+    return style
+
+
+def writeback(checker, rulecheck_results, pset_name="PsetCheck", colour=True):
     """Writes the check results back into the model as one Pset per element.
 
     checker: the Checker the rules were run with. Its model (checker.model) is CHANGED here.
@@ -220,11 +244,19 @@ def writeback(checker, rulecheck_results, pset_name="PsetCheck"):
     - one property per rule, named like the report sheet (e.g. "4 range Volumen (m3)"),
       with the result: "PASS", "FAIL (value: 0.0)", "Property does not exist", ...
 
+    colour=True also paints every checked element in the model: red if Status is FAIL, green if PASS.
+    Any IFC viewer (BIMcollab, Solibri, usBIM) then shows the result in 3D, without any geometry work in Python.
+    Note: the original colours are replaced in the model (only in the downloaded copy, the original file stays).
+
     Running it again replaces the old PsetCheck, so an element never gets two of them.
     The model is NOT saved here: afterwards use checker.model.write(path) or checker.model.to_string().
     Returns the number of elements that got a PsetCheck.
     """
     model = checker.model
+
+    #The two colour styles, created once and shared by all elements
+    if colour:
+        colour_styles = {status: _get_colour_style(model, status) for status in STATUS_COLOURS}
 
     #Step 1: collect the results per element instead of per rule.
     #collected = {GUID: {rule name: result text, ...}, ...}
@@ -267,6 +299,13 @@ def writeback(checker, rulecheck_results, pset_name="PsetCheck"):
 
         new_pset = ifcopenshell.api.pset.add_pset(model, product=element, name=pset_name)
         ifcopenshell.api.pset.edit_pset(model, pset=new_pset, properties=properties)
+
+        #Step 3: paint the element. Its geometry ("representations") gets the red or green style.
+        #Replaces the element's previous colour; elements without geometry are skipped.
+        if colour and element.Representation:
+            style = colour_styles["PASS" if status == "PASS" else "FAIL"]
+            for representation in element.Representation.Representations:
+                ifcopenshell.api.style.assign_representation_styles(model, shape_representation=representation, styles=[style])
 
     print(f"PsetCheck written to {len(collected)} elements")
     return len(collected)
