@@ -23,6 +23,10 @@ SKIP_CLASSES = []   # e.g. ["IfcEarthworksFill"] if one class makes it too slow
 LINEAR_DEFLECTION = 0.05    # metres
 ANGULAR_DEFLECTION = 0.5    # radians (default)
 
+# Skip the cutting/subtracting of volumes (openings, "body minus trench"). These boolean operations are usually
+# the slowest part. The shapes may look slightly wrong (e.g. no holes), which is fine for a general view.
+SKIP_BOOLEANS = True
+
 COLOURS = {"PASS": "#3F8A4A", "FAIL": "#C0392B", "NONE": "#A0A0A0"}
 
 
@@ -42,6 +46,9 @@ def build_figure(model):
     settings.set("use-world-coords", True)   # every element at its real position
     settings.set("mesher-linear-deflection", LINEAR_DEFLECTION)
     settings.set("mesher-angular-deflection", ANGULAR_DEFLECTION)
+    if SKIP_BOOLEANS:
+        settings.set("disable-opening-subtractions", True)
+        settings.set("disable-boolean-result", True)
 
     elements = [e for e in model.by_type("IfcElement") if not any(e.is_a(c) for c in SKIP_CLASSES)]
 
