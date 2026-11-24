@@ -57,6 +57,8 @@ def build_figure(model):
             bucket["count"] += len(verts)
 
             done += 1
+            if done % 100 == 0:
+                print(f"  {done} of {len(elements)} elements triangulated ({time.time() - start:.0f} s)")
             if not iterator.next():
                 break
     geom_time = time.time() - start
@@ -86,7 +88,10 @@ def build_figure(model):
     return fig, info
 
 
+print("Opening IFC ...")
+t = time.time()
 model = ifcopenshell.open(IFC_PATH)
+print(f"Opened in {time.time() - t:.1f} s - now triangulating (this is the slow part)")
 fig, info = build_figure(model)
 
 ui.label(info)
